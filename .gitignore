@@ -1,0 +1,23 @@
+.idea
+**/.ipynb_checkpoints
+**/__pycache__
+**/wandb
+data_untracked
+models_old
+models/*
+!models/README.md
+.DS_Store
+*.pdf
+*.svg
+*.png
+/legacy
+gen_fig_legacy
+
+# Large local data — contents ignored; see README.md in each folder
+data/data_groot/*
+!data/data_groot/README.md
+data/data_ocean/*
+!data/data_ocean/README.md
+data/synthetic/*
+!data/synthetic/README.md
+data/legacy/

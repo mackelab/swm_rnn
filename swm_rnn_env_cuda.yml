@@ -1,0 +1,29 @@
+name: swm_rnn_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10.16
+  - pip
+  - numpy=1.26.4
+  - scipy=1.15.3
+  - pandas=2.3.2
+  - matplotlib-base=3.10.6
+  - h5py=3.13.0
+  - jupyter=1.1.1
+  - jupyterlab=4.4.7
+  - notebook=7.4.5
+  - ipykernel=6.29.5
+  - ipython=8.31.0
+  - pip:
+      # Stable CUDA 11.8 stack (prev used 2.7.0.dev nightly; closest available release)
+      - --extra-index-url https://download.pytorch.org/whl/cu118
+      - torch==2.7.1+cu118
+      - torchvision==0.22.1+cu118
+      - torchaudio==2.7.1+cu118
+      - mat73==0.65
+      - scikit-learn==1.6.1
+      - seaborn==0.13.2
+      - statsmodels==0.14.5
+      - pyvista==0.46.5
+      - wandb==0.19.9
