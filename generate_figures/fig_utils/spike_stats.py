@@ -526,7 +526,7 @@ _EPS = 1e-8
 def stimulus_tuning_curves(
     r_trial, labels, n_pos=3, n_stim=6, absent_label=0
 ):
-    """Per-position item-conditioned means (6+6+6 factorization).
+    """Per-position item-conditioned means
 
     Label ``absent_label`` (default 0) means that position was not shown
     (shorter sequences). Those trials are dropped for that position only.
@@ -629,10 +629,10 @@ def session_stimulus_delay_activity(
     split="eval",
     gen=True,
 ):
-    """Notebook-08 delay activity: length-``seq_len`` trials, mean over ``[t1, t2)``.
+    """ extract delay activity: length-``seq_len`` trials, mean over ``[t1, t2)``.
 
     Data are observed spikes; when ``gen=True``, the model side is generated
-    spikes (``data_gen``), same as the 08 stimulus-response panel. Default
+    spikes (``data_gen``), same as notebook 08 stimulus-response panel. Default
     ``split='eval'`` is the held-out validation trials for this model's own
     train/val indices.
 
@@ -707,12 +707,11 @@ def per_session_delay_tuning(
     initial_state="prior_mean",
     noise_scale=1.0,
 ):
-    """Match data vs generated delay spikes on stimulus-conditioned tuning.
-
-    Length-3 trials, mean over bins ``[t1, t2)``. Label 0 is ignored per position.
-    ``r_tuning`` is eval-data vs model tuning, with the model generated on all
-    length-3 **train** stimuli. ``r_tuning_tv`` is the same statistic on all
-    train-data vs eval-data tuning (no subsampling).
+    """Compare model tuning curves to data tuning curves. Tuning curve here is 
+       per unit, per position, a vector of length n_stim (6). This vector
+       is correlated with the corresponding data vector. These are
+       coefficients are then averaged over units and positions to get the
+       r_tuning and r_tuning_tv statistics.
 
     Args:
         vae: trained model.
