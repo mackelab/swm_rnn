@@ -2,7 +2,7 @@
 
 ---
 
-Repository accompanying [biorxiv](https://www.biorxiv.org/content/10.64898/2026.09.30.755565v1)
+Repository accompanying [Pals & Macke, *Biorxiv* 2026](https://www.biorxiv.org/content/10.64898/2026.09.30.755565v1)
 
 ---
 ### Overview 
