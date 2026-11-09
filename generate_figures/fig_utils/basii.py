@@ -402,6 +402,12 @@ def flat1d(A):
     return np.reshape(A, (-1,))
 
 
+def symmetric_orthogonalize(W):
+    """Loewdin orthogonalisation: the orthonormal matrix closest to ``W`` in Frobenius norm."""
+    U, _, Vt = np.linalg.svd(W, full_matrices=False)
+    return U @ Vt
+
+
 def compute_orthogonal_subspace(
     X,
     mask=None,
@@ -429,7 +435,11 @@ def compute_orthogonal_subspace(
         time_windows: List of time windows for each axis (e.g., [[0, 30], [18, 30], [18, 30]])
         substr_mean: Whether to subtract mean before PCA
         soft_norm_constant: Small constant added to std deviation for soft normalization
-        orthogonalize: Whether to orthogonalize each new subspace against previously computed ones
+        orthogonalize: How to orthogonalize subspaces. ``True``: sequential, each new subspace
+            against all previous ones. ``"time"``: stimulus subspaces only against time.
+            ``"joint"``: as ``"time"``, but stimulus marginals are centred over stimuli and the
+            stimulus subspaces are then orthogonalized jointly (``symmetric_orthogonalize``),
+            so the result does not depend on the position order.
         standardize: Whether to scale each neuron's activity to have unit variance before PCA
         basis: Method to compute basis ('pca' or 'lrr')
         lrr_reg: regularisation for linear regression if lrr is used.
@@ -441,6 +451,11 @@ def compute_orthogonal_subspace(
     """
 
     X_resid = X.copy()
+
+    # "joint" runs the "time" scheme, then orthogonalizes the stimulus subspaces jointly
+    joint = orthogonalize == "joint"
+    if joint:
+        orthogonalize = "time"
 
     n_state = X.shape[0]
     n_dims = X.ndim - 1  # Exclude n_state dimension
@@ -507,6 +522,9 @@ def compute_orthogonal_subspace(
             # Get marginal and mask
             X_pca, M_pca = compute_marginal(X_resid, mask, axis_idx, time_windows[i])
             X_pca = X_pca[:, M_pca]  # Slice to valid samples
+            if joint and curr_label.startswith("s"):
+                # centre position marginal over its stimulus identities
+                X_pca = X_pca - X_pca.mean(axis=1, keepdims=True)
 
             pca = PCA_NoMean(n_components=n_components[i]).fit(X_pca.T)
             W_part = pca.components_.T
@@ -611,6 +629,15 @@ def compute_orthogonal_subspace(
         if key in marg_order:
             idx = marg_order.index(key)
             W_list_sorted.append(W_list[idx])
+
+    if joint:
+        # orthogonalize all stimulus subspaces jointly: [W1, W2, W3] = U S V^T -> U V^T
+        keys = [k for k in strict_order if k in marg_order]
+        stim = [i for i, k in enumerate(keys) if k.startswith("s")]
+        sizes = [W_list_sorted[i].shape[1] for i in stim]
+        W_stim = symmetric_orthogonalize(np.hstack([W_list_sorted[i] for i in stim]))
+        for i, W_part in zip(stim, np.split(W_stim, np.cumsum(sizes)[:-1], axis=1)):
+            W_list_sorted[i] = W_part
 
     W_enc = np.hstack(W_list_sorted) if W_list_sorted else np.hstack(W_list)
     W_full = expand_basis_to_full(W_enc)

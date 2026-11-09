@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 
+Array = np.ndarray
 
 class LowRankRNN:
     """Minimal low-rank RNN for hand-constructed ring and transient toy models.
@@ -675,10 +676,12 @@ def generate_student_teacher_dataset(
     from vi_rnn.data_utils import make_all_trials
 
     u, _, labels_training, _ = make_all_trials(
-        incl_ns_stim=False,
-        incl_probe=False,
-        incl_cue=False,
-        incl_ramp=False,
+        {
+            "incl_ns_stim": False,
+            "incl_probe": False,
+            "incl_cue": False,
+            "incl_ramp": False,
+        },
         dur=trial_duration_s,
         n_stim=n_conditions,
         n_pos=1,

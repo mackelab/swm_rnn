@@ -2567,6 +2567,8 @@ def plot_fixed_points_by_macaque(
     ax.set_xticklabels([f"{t:g}" for t in freeze_times])
 
     ax.set_ylim(0, 200)
+    ax.set_yticks([0, 100, 200])
+    ax.set_yticks([50, 150], minor=True)
     for artist in list(ax.collections) + list(ax.patches[:n_boxes]) + list(ax.lines):
         artist.set_clip_on(False)
 
@@ -2592,8 +2594,25 @@ def plot_fixed_points_by_macaque(
     )
     # turn of bottom spine
     ax.spines["bottom"].set_visible(False)
-    # set bottom axis ticks to size 0, but keep tick labels!!
-    ax.tick_params(axis="x", which="both", size=0)
+
+    # short baseline under each clamp onset, spanning its pair of boxes
+    spans = {}
+    for box in ax.patches[:n_boxes]:
+        xs = box.get_path().vertices[:, 0]
+        k = int(round(xs.mean()))
+        lo, hi = spans.get(k, (np.inf, -np.inf))
+        spans[k] = (min(lo, xs.min()), max(hi, xs.max()))
+    for lo, hi in spans.values():
+        ax.plot(
+            [lo, hi],
+            [0, 0],
+            transform=ax.get_xaxis_transform(),
+            color=ax.spines["left"].get_edgecolor(),
+            lw=ax.spines["left"].get_linewidth(),
+            solid_capstyle="butt",
+            clip_on=False,
+        )
+
     if save_path:
         save_figure(fig, save_path, dpi=dpi)
 
@@ -2770,6 +2789,144 @@ def plot_spike_stats_sessions(
             else:
                 ax.set_xlabel("")
                 ax.tick_params(axis="x", which="major", labelbottom=False)
+
+    _transparent_figure(fig, axes)
+    if save_path:
+        save_figure(fig, save_path, dpi=dpi)
+    if show:
+        display(fig)
+        plt.close(fig)
+    return fig, axes
+
+
+SPIKE_SUMMARY_METRICS = (
+    ("mean_rate", "mean rate"),
+    ("std_ISI", "std ISI"),
+    ("pwcorr", "pairwise corr."),
+)
+
+
+def plot_spike_stats_summary(
+    df,
+    *,
+    macaque_order=("groot", "ocean"),
+    highlight_sessions=None,
+    ylims=(0.7, 1.0),
+    yticks=(0.7, 0.8, 0.9, 1.0),
+    box_w=1.5,
+    box_h=0.6,
+    panel_gap_x=0.3,
+    panel_gap_y=0.2,
+    pad_left=0.45,
+    dpi=300,
+    save_path=None,
+    show=True,
+):
+    """
+    Per-session Pearson r (data vs RNN-generated) for all sessions and models (notebook 02).
+
+    Args:
+        df (pd.DataFrame): per-model rows with ``macaque`` and per-session lists
+            ``mean_rate``, ``std_ISI``, ``pwcorr`` (held-out r values).
+        macaque_order (tuple[str]): row order.
+        highlight_sessions (dict | None): macaque → 0-based session indices to mark
+            (e.g. the example sessions in the main figure).
+        ylims (tuple[float]): shared y-axis limits.
+        yticks (tuple[float]): y-axis ticks.
+        box_w, box_h (float): panel size in inches.
+        panel_gap_x, panel_gap_y (float): panel spacing.
+        pad_left (float): left margin (room for macaque labels).
+        dpi (int): figure resolution.
+        save_path (str | None): output path.
+        show (bool): display in notebook.
+
+    Returns:
+        tuple: ``(fig, axes)`` shape ``(n_macaques, 3)``.
+    """
+    palette = {"groot": "gold", "ocean": "tomato"}
+    macaque_labels = {"groot": "macaque G", "ocean": "macaque O"}
+    highlight_sessions = highlight_sessions or {}
+
+    fig, axes = subplots_panels(
+        len(macaque_order),
+        len(SPIKE_SUMMARY_METRICS),
+        box_w=box_w,
+        box_h=box_h,
+        panel_gap_x=panel_gap_x,
+        panel_gap_y=panel_gap_y,
+        pad_left=pad_left,
+        dpi=dpi,
+        sharex=True,
+        sharey=True,
+    )
+    axes = np.atleast_2d(axes)
+
+    for row, mq in enumerate(macaque_order):
+        d = df[df["macaque"] == mq]
+        color = palette[mq]
+        dark = tuple(c * 0.6 for c in mc.to_rgb(color))
+        for col, (key, title) in enumerate(SPIKE_SUMMARY_METRICS):
+            ax = axes[row, col]
+            r = np.array(d[key].tolist(), dtype=float)  # (n_models, n_sessions)
+            n_models, n_sess = r.shape
+            sessions = np.arange(1, n_sess + 1)
+            r_mean = np.nanmean(r, axis=0)
+
+            for s in highlight_sessions.get(mq, []):
+                ax.axvspan(s + 0.5, s + 1.5, color="0.9", lw=0, zorder=0)
+            ax.axhline(
+                np.mean(r_mean), ls="--", lw=0.6, color="slategray", zorder=1
+            )
+            line_kw = dict(color=color, linewidth=0.8)
+            ax.boxplot(
+                [r[~np.isnan(r[:, s]), s] for s in range(n_sess)],
+                positions=sessions,
+                widths=0.6,
+                patch_artist=True,
+                showfliers=False,
+                manage_ticks=False,
+                boxprops=dict(facecolor=color, edgecolor=color, linewidth=0.8),
+                whiskerprops=line_kw,
+                capprops=line_kw,
+                medianprops=dict(color=dark, linewidth=0.8),
+                zorder=2,
+            )
+            mu, sd = np.mean(r_mean), np.std(r_mean)
+            # fixed 3 decimals; sd below resolution reported as "< 0.001"
+            ax.text(
+                0.97,
+                0.06,
+                f"{mu:.3f}, sd < 0.001" if sd < 0.0005 else f"{mu:.3f} ± {sd:.3f}",
+                transform=ax.transAxes,
+                fontsize=SPIKE_R_FONTSIZE,
+                ha="right",
+                va="bottom",
+            )
+
+            if row == 0:
+                ax.set_title(title, fontsize=SPIKE_TITLE_FONTSIZE)
+            if col == 0:
+                ax.set_ylabel("$r$")
+                ax.text(
+                    -0.4,
+                    0.5,
+                    macaque_labels.get(mq, mq),
+                    transform=ax.transAxes,
+                    rotation=90,
+                    va="center",
+                    ha="center",
+                    fontweight="bold",
+                )
+            if row == len(macaque_order) - 1:
+                ax.set_xlabel("session")
+
+    axes[0, 0].set_ylim(ylims)
+    axes[0, 0].set_yticks(yticks)
+    axes[0, 0].set_xlim(0.5, n_sess + 0.5)
+    axes[0, 0].set_xticks(
+        np.arange(1, n_sess + 1),
+        labels=[str(s) if s in (1, 5, 10, 15) else "" for s in range(1, n_sess + 1)],
+    )
 
     _transparent_figure(fig, axes)
     if save_path:
