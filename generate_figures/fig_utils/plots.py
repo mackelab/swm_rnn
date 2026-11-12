@@ -2384,15 +2384,15 @@ def plot_fixed_points_subspaces(
             color="darkgray",
             edgecolors="black",
             alpha=1,
-            s=10,
+            s=6.4,
             zorder=10,
-            linewidths=0.75,
+            linewidths=0.6,
         )
         ax[i].plot(
             Z_fps[~stable, i * 2],
             Z_fps[~stable, i * 2 + 1],
             marker="o",
-            markersize=2.5,
+            markersize=2.0,
             markerfacecolor="white",
             markerfacecoloralt="black",
             fillstyle="left",
