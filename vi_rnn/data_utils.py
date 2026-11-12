@@ -221,7 +221,9 @@ def build_trial_matrices_batched(
     trial_ends = np.round(trial_ends[matches]).astype(int)
     targets = np.round(targets[matches])  # .astype(int)
 
-    response_times = np.round(response_times[matches]).astype(int)
+    # missing responses (NaN) -> -1; casting NaN to int is platform-dependent
+    response_times = response_times[matches]
+    response_times = np.where(np.isnan(response_times), -1, np.round(response_times)).astype(int)
     responses = np.round(responses[matches]).astype(int)
 
     target_onset_times = target_onset_times[matches]
@@ -588,11 +590,16 @@ def make_all_trials(
     use_product=False,
     random_trials=None,
     rng=None,
+    stim_shift=None,
 ):
     """
     Generates input sequences (u) and labels for a spatial working memory task.
 
     Args:
+        stim_shift: Bins by which stimulus inputs and the fixation offset lag their event
+            times, as when loading recorded trials (``build_trial_matrices_batched``).
+            ``delay_ends`` stays in event time. If None, uses ``task_params["stim_shift"]``
+            (0 if absent), so inputs match those the model was trained on.
         dur: Total duration in seconds (calculated automatically if None).
         n_stim: Total number of possible stimuli (e.g., locations on a circle).
         n_pos: Number of stimuli presented per trial (sequence length).
@@ -676,6 +683,9 @@ def make_all_trials(
         cue_idx = idxes.pop(0)
         dim_u += 1
 
+    if stim_shift is None:
+        stim_shift = task_params.get("stim_shift", 0)
+
     u = np.zeros((n_trials, dim_u, dur_bins))
     delay_ends = np.zeros(n_trials, dtype=int)
     stim_int_bins = np.round((stim_dur + interval_arr) / bin_size).astype(int)
@@ -690,7 +700,9 @@ def make_all_trials(
 
         for pos_ind in range(n_pos):
             lab = labels[pos_ind, tr_ind]
-            stim_start = baseline_bins_arr[tr_ind] + pos_ind * stim_int_bins[tr_ind]
+            stim_start = (
+                baseline_bins_arr[tr_ind] + pos_ind * stim_int_bins[tr_ind] + stim_shift
+            )
             stim_end = stim_start + stim_dur_bins
 
             # Ensure we don't exceed the pre-allocated array (Boundary Check)
@@ -710,10 +722,12 @@ def make_all_trials(
             if task_params["incl_ns_stim"]:
                 u[tr_ind, ns_idx, stim_start:stim_end] = 1
             if pos_ind == n_pos - 1:
-                delay_ends[tr_ind] = stim_end + delay_arr[tr_ind]
+                # event time (unshifted), as for recorded trials
+                delay_ends[tr_ind] = stim_end - stim_shift + delay_arr[tr_ind]
+        go_bin = delay_ends[tr_ind] + stim_shift  # bin at which the go cue enters the input
         if task_params["incl_cue"]:
             if cue_dur is None:
-                cue_dur = delay_ends[tr_ind]  # Cue lasts until the end of the delay
+                cue_dur = go_bin  # Cue lasts until the end of the delay
             elif cue_dur < 0:
                 u[:, cue_idx, :] = 1  # Probe is on for the entire duration
             else:
@@ -723,15 +737,15 @@ def make_all_trials(
 
         # ramping signal
         if task_params["incl_ramp"]:
-            ramp_len = delay_ends[tr_ind] - stim_end
+            ramp_len = go_bin - stim_end
             t = np.arange(ramp_len) * bin_size
 
             # linear ramp normalized to max_delay_sec
             ramp = t / 1.5
             ramp = np.clip(ramp, 0, ramp_amp)  # Ensure ramp does not exceed 1
-            u[tr_ind, ramp_idx, stim_end : delay_ends[tr_ind]] = ramp
+            u[tr_ind, ramp_idx, stim_end:go_bin] = ramp
             if ramp_dur is not None and ramp_dur < 0:
-                u[tr_ind, ramp_idx, delay_ends[tr_ind] :] = ramp[-1]
+                u[tr_ind, ramp_idx, go_bin:] = ramp[-1]
 
     # 9. Generate Labels for training (One-hot and Index-based)
     labels_one_hot = np.zeros((n_trials, n_stim, n_pos))
